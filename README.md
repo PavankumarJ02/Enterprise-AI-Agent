@@ -519,7 +519,14 @@ mypy src tests
   - Automated grid sweep coordinator (`ExperimentTrackingService.run_grid_sweep`) testing retrieval strategy (dense vs hybrid) and top-k variations against golden benchmark datasets
   - REST API endpoints (`POST /api/v1/experiments/runs`, `GET /api/v1/experiments/runs/{id}`, `GET /api/v1/experiments/runs`, `PUT /api/v1/experiments/runs/{id}`, `POST /api/v1/experiments/compare`, and `POST /api/v1/experiments/grid`)
   - Integration with `RAGEvaluationService` for automated metric evaluation and run logging
-- [ ] **Milestone 17: Observability (Langfuse / OpenTelemetry)**
+- [x] **Milestone 17: Observability (Langfuse / OpenTelemetry Distributed Tracing)**
+  - Distributed tracing engine (`Tracer`) with async and sync context managers (`tracer.async_span`, `tracer.span`) and function decorators (`@tracer.trace`)
+  - OpenTelemetry GenAI semantic conventions integration tracking model IDs, prompt/completion tokens, execution latency, and operation status
+  - W3C `traceparent` context extraction, generation, and cross-service propagation (`00-{trace_id}-{span_id}-01`)
+  - Thread-safe bounded in-memory trace buffer (`InMemorySpanExporter`) with FIFO ejection, span nesting aggregation, and query filters
+  - OpenTelemetry HTTP JSON payload exporter (`OTLPSpanExporter`) compatible with OpenTelemetry Collector, Langfuse, Jaeger, and Datadog
+  - Automatic instrumentation across RAG queries (`rag.query`), vector retrieval (`rag.retrieval`), and LLM synthesis (`rag.synthesis`)
+  - REST API endpoints (`GET /api/v1/observability/traces`, `GET /api/v1/observability/traces/{trace_id}`, `DELETE /api/v1/observability/traces`, `GET /api/v1/observability/stats`)
 - [ ] **Milestone 18: API Surface Polish & Rate Limiting**
 - [ ] **Milestone 19: End-to-End Testing & Mock Fixtures**
 - [ ] **Milestone 20: Docker & Docker Compose Infrastructure**

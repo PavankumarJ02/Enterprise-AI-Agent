@@ -53,6 +53,15 @@ from enterprise_agent.schemas.guardrails import (
     GuardrailValidateRequest,
     GuardrailViolationType,
 )
+from enterprise_agent.schemas.observability import (
+    ObservabilityStats,
+    SpanEvent,
+    SpanKind,
+    SpanRecord,
+    SpanStatusCode,
+    TraceQueryFilter,
+    TraceRecord,
+)
 from enterprise_agent.schemas.rag import (
     Citation,
     GroundingEvaluation,
@@ -176,4 +185,11 @@ __all__ = [
     "RunComparison",
     "GridSweepRequest",
     "GridSweepResponse",
+    "SpanKind",
+    "SpanStatusCode",
+    "SpanEvent",
+    "SpanRecord",
+    "TraceRecord",
+    "TraceQueryFilter",
+    "ObservabilityStats",
 ]

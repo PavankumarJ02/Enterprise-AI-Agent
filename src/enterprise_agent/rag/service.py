@@ -6,10 +6,12 @@ from collections.abc import AsyncIterator
 
 from enterprise_agent.core.logging import get_logger
 from enterprise_agent.llm.base import LLMProvider
+from enterprise_agent.observability.tracer import Tracer
 from enterprise_agent.rag.citations import GroundingVerifier
 from enterprise_agent.rag.context import RAGContextAssembler
 from enterprise_agent.rag.prompts import RAGPromptBuilder
 from enterprise_agent.schemas.chat import TokenUsageResponse
+from enterprise_agent.schemas.observability import SpanKind
 from enterprise_agent.schemas.rag import (
     RAGQueryRequest,
     RAGQueryResponse,
@@ -33,12 +35,14 @@ class RAGService:
         context_assembler: RAGContextAssembler | None = None,
         prompt_builder: RAGPromptBuilder | None = None,
         grounding_verifier: GroundingVerifier | None = None,
+        tracer: Tracer | None = None,
     ) -> None:
         self.vector_service = vector_service
         self.llm = llm
         self.context_assembler = context_assembler or RAGContextAssembler()
         self.prompt_builder = prompt_builder or RAGPromptBuilder()
         self.grounding_verifier = grounding_verifier or GroundingVerifier()
+        self.tracer = tracer
 
     @property
     def model_name(self) -> str:
@@ -50,13 +54,44 @@ class RAGService:
         start_time = time.perf_counter()
         logger.info("Executing RAG query: '%s' (top_k=%d)", request.query, request.top_k)
 
+        if self.tracer:
+            async with self.tracer.async_span(
+                "rag.query",
+                kind=SpanKind.SERVER,
+                attributes={"query": request.query, "top_k": request.top_k},
+            ) as span:
+                res = await self._execute_query(request, start_time)
+                span.set_attribute("rag.status", res.status)
+                span.set_attribute("rag.sources_count", len(res.sources))
+                span.set_genai_metrics(
+                    model=res.model,
+                    prompt_tokens=res.usage.prompt_tokens,
+                    completion_tokens=res.usage.completion_tokens,
+                    temperature=request.temperature,
+                )
+                return res
+
+        return await self._execute_query(request, start_time)
+
+    async def _execute_query(self, request: RAGQueryRequest, start_time: float) -> RAGQueryResponse:
+        """Internal execution flow for RAG query."""
         # 1. Semantic Search
-        search_res = await self.vector_service.semantic_search(
-            query=request.query,
-            top_k=request.top_k,
-            filters=request.filters,
-            min_score=request.min_score,
-        )
+        if self.tracer:
+            async with self.tracer.async_span("rag.retrieval", kind=SpanKind.RETRIEVER) as r_span:
+                search_res = await self.vector_service.semantic_search(
+                    query=request.query,
+                    top_k=request.top_k,
+                    filters=request.filters,
+                    min_score=request.min_score,
+                )
+                r_span.set_attribute("results_count", len(search_res.results))
+        else:
+            search_res = await self.vector_service.semantic_search(
+                query=request.query,
+                top_k=request.top_k,
+                filters=request.filters,
+                min_score=request.min_score,
+            )
 
         # 2. Short-circuit if no relevant documentation found
         if not search_res.results:
@@ -92,11 +127,25 @@ class RAGService:
         )
 
         # 5. Generate Grounded Synthesis
-        llm_res = await self.llm.generate(
-            messages=messages,
-            temperature=request.temperature,
-            max_tokens=request.max_tokens,
-        )
+        if self.tracer:
+            async with self.tracer.async_span("rag.synthesis", kind=SpanKind.LLM) as s_span:
+                llm_res = await self.llm.generate(
+                    messages=messages,
+                    temperature=request.temperature,
+                    max_tokens=request.max_tokens,
+                )
+                s_span.set_genai_metrics(
+                    model=llm_res.model,
+                    prompt_tokens=llm_res.usage.prompt_tokens,
+                    completion_tokens=llm_res.usage.completion_tokens,
+                    temperature=request.temperature,
+                )
+        else:
+            llm_res = await self.llm.generate(
+                messages=messages,
+                temperature=request.temperature,
+                max_tokens=request.max_tokens,
+            )
 
         # 6. Verify Citations & Grounding
         grounding_eval = None

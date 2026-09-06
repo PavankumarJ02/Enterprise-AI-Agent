@@ -367,6 +367,40 @@ class Settings(BaseSettings):
         description="Default experiment name group for logging benchmark runs.",
     )
 
+    # -------------------------------------------------------------------------
+    # Observability & Distributed Tracing Configuration (OpenTelemetry / Langfuse)
+    # -------------------------------------------------------------------------
+    observability_enabled: bool = Field(
+        default=True,
+        description="Whether OpenTelemetry/Langfuse distributed tracing is globally active.",
+    )
+    observability_exporter: Literal["memory", "console", "otlp", "langfuse"] = Field(
+        default="memory",
+        description="Active span exporter ('memory', 'console', 'otlp', 'langfuse').",
+    )
+    observability_otlp_endpoint: str | None = Field(
+        default=None,
+        description="Target HTTP/gRPC endpoint for OpenTelemetry collector.",
+    )
+    observability_langfuse_public_key: SecretStr = Field(
+        default=SecretStr(""),
+        description="Public key for Langfuse Cloud or self-hosted Langfuse instance.",
+    )
+    observability_langfuse_secret_key: SecretStr = Field(
+        default=SecretStr(""),
+        description="Secret key for Langfuse Cloud or self-hosted Langfuse instance.",
+    )
+    observability_langfuse_host: str = Field(
+        default="https://cloud.langfuse.com",
+        description="Base URL for Langfuse instance API.",
+    )
+    observability_max_in_memory_traces: int = Field(
+        default=100,
+        ge=10,
+        le=5000,
+        description="Maximum number of recent traces retained in-memory for queries.",
+    )
+
     @property
     def is_production(self) -> bool:
         """Helper to check if running in production."""

@@ -15,6 +15,8 @@ from enterprise_agent.hybrid.service import HybridSearchService
 from enterprise_agent.ingestion.service import IngestionService
 from enterprise_agent.llm.base import LLMProvider
 from enterprise_agent.llm.factory import get_llm_provider
+from enterprise_agent.observability.service import ObservabilityService
+from enterprise_agent.observability.tracer import Tracer
 from enterprise_agent.rag.service import RAGService
 from enterprise_agent.reranking.base import Reranker
 from enterprise_agent.reranking.factory import create_reranker
@@ -64,6 +66,15 @@ _evaluation_service_instance: RAGEvaluationService | None = None
 # Module-level singleton instance of ExperimentTrackingService
 _experiment_service_instance: ExperimentTrackingService | None = None
 
+# Module-level singleton instance of ObservabilityService
+_observability_service_instance: ObservabilityService | None = None
+
+
+def reset_observability_service() -> None:
+    """Reset singleton ObservabilityService for test isolation."""
+    global _observability_service_instance
+    _observability_service_instance = None
+
 
 def reset_sql_service() -> None:
     """Reset singleton SQLDatabaseService for test isolation."""
@@ -92,6 +103,23 @@ def reset_experiment_service() -> None:
 def get_app_settings() -> Settings:
     """Dependency provider for application settings."""
     return get_settings()
+
+
+def get_observability_service(
+    settings: Settings = Depends(get_app_settings),
+) -> ObservabilityService:
+    """Dependency provider yielding singleton ObservabilityService."""
+    global _observability_service_instance
+    if _observability_service_instance is None:
+        _observability_service_instance = ObservabilityService(settings=settings)
+    return _observability_service_instance
+
+
+def get_tracer(
+    observability_service: ObservabilityService = Depends(get_observability_service),
+) -> Tracer:
+    """Dependency provider yielding active Tracer engine."""
+    return observability_service.tracer
 
 
 def get_llm(
@@ -176,11 +204,13 @@ def get_hybrid_search_service(
 def get_rag_service(
     vector_service: VectorSearchService = Depends(get_vector_search_service),
     llm: LLMProvider = Depends(get_llm),
+    tracer: Tracer = Depends(get_tracer),
 ) -> RAGService:
     """Dependency provider yielding the RAGService."""
     return RAGService(
         vector_service=vector_service,
         llm=llm,
+        tracer=tracer,
     )
 
 
