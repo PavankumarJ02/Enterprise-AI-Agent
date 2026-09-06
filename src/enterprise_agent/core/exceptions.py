@@ -44,3 +44,27 @@ class LLMProviderError(LLMException):
     """Raised when an unrecoverable error occurs in upstream provider."""
 
     pass
+
+
+class VectorStoreError(AppException):
+    """Raised when vector database operations fail (connection, indexing, search)."""
+
+    pass
+
+
+class RerankingError(AppException):
+    """Raised when cross-encoder reranking operations fail."""
+
+    pass
+
+
+class SQLSecurityError(AppException):
+    """Raised when an unsafe or forbidden SQL query is detected."""
+
+    pass
+
+
+class SQLExecutionError(AppException):
+    """Raised when SQL query execution fails in the database engine."""
+
+    pass

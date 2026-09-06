@@ -1,8 +1,11 @@
 """Chat completion API endpoint."""
 
+import json
 import time
+from collections.abc import AsyncIterator
 
 from fastapi import APIRouter, Depends, status
+from fastapi.responses import StreamingResponse
 
 from enterprise_agent.api.deps import get_llm
 from enterprise_agent.core.logging import get_logger
@@ -69,4 +72,52 @@ async def chat_completion(
         ),
         latency_ms=latency_ms,
         status="success",
+    )
+
+
+@router.post(
+    "/stream",
+    status_code=status.HTTP_200_OK,
+    summary="Streaming LLM Generation",
+    description="Stream conversational tokens in real-time using Server-Sent Events (SSE).",
+)
+async def chat_stream(
+    request: ChatRequest,
+    llm: LLMProvider = Depends(get_llm),
+) -> StreamingResponse:
+    """Stream token chunks via Server-Sent Events (SSE)."""
+    logger.info("Processing streaming chat request (query length=%d chars)", len(request.query))
+
+    messages: list[ChatMessage] = []
+    if request.system_prompt:
+        messages.append(ChatMessage(role=MessageRole.SYSTEM, content=request.system_prompt))
+    for item in request.history:
+        messages.append(ChatMessage(role=MessageRole(item.role), content=item.content))
+    messages.append(ChatMessage(role=MessageRole.USER, content=request.query))
+
+    async def sse_event_generator() -> AsyncIterator[str]:
+        try:
+            async for chunk in llm.stream(
+                messages=messages,
+                temperature=request.temperature,
+                max_tokens=request.max_tokens,
+            ):
+                payload = json.dumps(
+                    {"delta": chunk.delta_text, "finish_reason": chunk.finish_reason}
+                )
+                yield f"data: {payload}\n\n"
+            yield "data: [DONE]\n\n"
+        except Exception as e:
+            logger.error("Error during streaming generation: %s", e)
+            error_payload = json.dumps({"error": "STREAM_ERROR", "message": str(e)})
+            yield f"data: {error_payload}\n\n"
+
+    return StreamingResponse(
+        sse_event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
     )
