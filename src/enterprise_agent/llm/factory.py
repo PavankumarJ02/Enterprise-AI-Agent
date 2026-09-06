@@ -4,6 +4,7 @@ from enterprise_agent.config.settings import Settings
 from enterprise_agent.core.exceptions import ConfigurationError
 from enterprise_agent.core.logging import get_logger
 from enterprise_agent.llm.base import LLMProvider
+from enterprise_agent.llm.gemini_client import GeminiLLMProvider
 from enterprise_agent.llm.mock_client import MockLLMProvider
 from enterprise_agent.llm.openai_client import OpenAILLMProvider
 
@@ -17,6 +18,27 @@ def get_llm_provider(settings: Settings) -> LLMProvider:
     if provider_type == "mock":
         logger.info("Initializing MockLLMProvider (offline development/testing mode)")
         return MockLLMProvider(model_name=settings.llm_model)
+
+    if provider_type == "gemini":
+        api_key = settings.effective_gemini_api_key
+        if not api_key:
+            raise ConfigurationError(
+                "LLM provider 'gemini' requires GEMINI_API_KEY (or LLM_API_KEY) "
+                "to be configured in .env."
+            )
+
+        logger.info(
+            "Initializing GeminiLLMProvider [model=%s, max_retries=%d]",
+            settings.llm_model,
+            settings.llm_max_retries,
+        )
+        return GeminiLLMProvider(
+            api_key=api_key,
+            default_model=settings.llm_model,
+            default_temperature=settings.llm_temperature,
+            default_max_tokens=settings.llm_max_tokens,
+            max_retries=settings.llm_max_retries,
+        )
 
     if provider_type in {"openai", "groq", "ollama", "azure"}:
         api_key = settings.llm_api_key.get_secret_value()

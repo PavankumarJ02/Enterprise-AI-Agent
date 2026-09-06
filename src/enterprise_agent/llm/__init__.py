@@ -9,6 +9,7 @@ from enterprise_agent.llm.base import (
     TokenUsage,
 )
 from enterprise_agent.llm.factory import get_llm_provider
+from enterprise_agent.llm.gemini_client import GeminiLLMProvider
 from enterprise_agent.llm.mock_client import MockLLMProvider
 from enterprise_agent.llm.openai_client import OpenAILLMProvider
 
@@ -20,6 +21,7 @@ __all__ = [
     "LLMStreamChunk",
     "LLMProvider",
     "OpenAILLMProvider",
+    "GeminiLLMProvider",
     "MockLLMProvider",
     "get_llm_provider",
 ]
