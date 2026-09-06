@@ -355,6 +355,18 @@ class Settings(BaseSettings):
         description="Minimum threshold for ground truth context recall.",
     )
 
+    # -------------------------------------------------------------------------
+    # Experiment Tracking & Benchmarking Configuration
+    # -------------------------------------------------------------------------
+    experiments_db_path: str = Field(
+        default="data/experiments.db",
+        description="Path to SQLite database for persisting benchmark experiment runs.",
+    )
+    experiments_default_name: str = Field(
+        default="rag_optimization",
+        description="Default experiment name group for logging benchmark runs.",
+    )
+
     @property
     def is_production(self) -> bool:
         """Helper to check if running in production."""

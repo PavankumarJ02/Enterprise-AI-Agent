@@ -34,6 +34,16 @@ from enterprise_agent.schemas.evaluation import (
     RunEvaluationRequest,
     SampleEvaluationResult,
 )
+from enterprise_agent.schemas.experiments import (
+    ExperimentCompareRequest,
+    ExperimentRun,
+    ExperimentRunCreate,
+    ExperimentRunUpdate,
+    GridSweepRequest,
+    GridSweepResponse,
+    MetricDelta,
+    RunComparison,
+)
 from enterprise_agent.schemas.guardrails import (
     GuardrailAction,
     GuardrailCheckResult,
@@ -158,4 +168,12 @@ __all__ = [
     "EvaluationReport",
     "RunEvaluationRequest",
     "BenchmarkDatasetResponse",
+    "ExperimentRunCreate",
+    "ExperimentRunUpdate",
+    "ExperimentRun",
+    "MetricDelta",
+    "ExperimentCompareRequest",
+    "RunComparison",
+    "GridSweepRequest",
+    "GridSweepResponse",
 ]

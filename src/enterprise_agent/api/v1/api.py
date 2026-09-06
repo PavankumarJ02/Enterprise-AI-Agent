@@ -7,6 +7,7 @@ from enterprise_agent.api.v1.chat import router as chat_router
 from enterprise_agent.api.v1.documents import router as documents_router
 from enterprise_agent.api.v1.embeddings import router as embeddings_router
 from enterprise_agent.api.v1.evaluation import router as evaluation_router
+from enterprise_agent.api.v1.experiments import router as experiments_router
 from enterprise_agent.api.v1.guardrails import router as guardrails_router
 from enterprise_agent.api.v1.health import router as health_router
 from enterprise_agent.api.v1.rag import router as rag_router
@@ -28,3 +29,4 @@ api_v1_router.include_router(sql_router)
 api_v1_router.include_router(query_router)
 api_v1_router.include_router(guardrails_router)
 api_v1_router.include_router(evaluation_router)
+api_v1_router.include_router(experiments_router)

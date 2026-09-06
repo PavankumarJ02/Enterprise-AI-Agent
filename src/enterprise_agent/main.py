@@ -52,6 +52,11 @@ def create_application(settings: Settings | None = None) -> FastAPI:
         lifespan=lifespan,
     )
 
+    if settings is not None:
+        from enterprise_agent.api.deps import get_app_settings
+
+        app.dependency_overrides[get_app_settings] = lambda: app_settings
+
     # -------------------------------------------------------------------------
     # Middlewares
     # -------------------------------------------------------------------------

@@ -11,7 +11,7 @@ def test_default_settings() -> None:
     settings = Settings()
     assert settings.app_name == "Enterprise AI Knowledge & Decision Agent"
     assert settings.app_env in {"development", "testing"}
-    assert settings.llm_provider in {"mock", "openai", "groq", "ollama", "azure"}
+    assert settings.llm_provider in {"mock", "gemini", "openai", "groq", "ollama", "azure"}
     assert settings.llm_temperature >= 0.0
     assert settings.llm_max_tokens > 0
 

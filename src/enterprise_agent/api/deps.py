@@ -9,6 +9,7 @@ from enterprise_agent.config.settings import Settings, get_settings
 from enterprise_agent.embeddings.factory import get_embeddings_service
 from enterprise_agent.embeddings.service import EmbeddingsService
 from enterprise_agent.evaluation.service import RAGEvaluationService
+from enterprise_agent.experiments.service import ExperimentTrackingService
 from enterprise_agent.guardrails.service import GuardrailsService
 from enterprise_agent.hybrid.service import HybridSearchService
 from enterprise_agent.ingestion.service import IngestionService
@@ -60,6 +61,9 @@ _guardrails_service_instance: GuardrailsService | None = None
 # Module-level singleton instance of RAGEvaluationService
 _evaluation_service_instance: RAGEvaluationService | None = None
 
+# Module-level singleton instance of ExperimentTrackingService
+_experiment_service_instance: ExperimentTrackingService | None = None
+
 
 def reset_sql_service() -> None:
     """Reset singleton SQLDatabaseService for test isolation."""
@@ -77,6 +81,12 @@ def reset_evaluation_service() -> None:
     """Reset singleton RAGEvaluationService for test isolation."""
     global _evaluation_service_instance
     _evaluation_service_instance = None
+
+
+def reset_experiment_service() -> None:
+    """Reset singleton ExperimentTrackingService for test isolation."""
+    global _experiment_service_instance
+    _experiment_service_instance = None
 
 
 def get_app_settings() -> Settings:
@@ -341,3 +351,17 @@ def get_evaluation_service(
             settings=settings,
         )
     return _evaluation_service_instance
+
+
+def get_experiment_service(
+    evaluation_service: RAGEvaluationService = Depends(get_evaluation_service),
+    settings: Settings = Depends(get_app_settings),
+) -> ExperimentTrackingService:
+    """Dependency provider yielding singleton ExperimentTrackingService."""
+    global _experiment_service_instance
+    if _experiment_service_instance is None:
+        _experiment_service_instance = ExperimentTrackingService(
+            evaluation_service=evaluation_service,
+            settings=settings,
+        )
+    return _experiment_service_instance

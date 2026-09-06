@@ -512,7 +512,13 @@ mypy src tests
   - Curated 10-query enterprise golden benchmark dataset (`ENTERPRISE_BENCHMARK_DATASET`) covering HR stipends, travel limits, SOC2 controls, and security policies
   - Evaluation orchestration engine (`RAGEvaluationService`) computing sample-level scores and dataset-level statistical summaries (mean, min, max, threshold verification)
   - REST API endpoints: `POST /api/v1/evaluation/run` and `GET /api/v1/evaluation/dataset`
-- [ ] **Milestone 16: Experiment Tracking & Benchmarking**
+- [x] **Milestone 16: Experiment Tracking & Benchmarking**
+  - Persistent SQLite experiment telemetry repository (`ExperimentRunRepository`) storing run metadata, hyperparameters, evaluation metrics, tags, and execution latency
+  - In-memory SQLite connection pooling and multi-process transactional persistence with foreign key support and automatic schema migration
+  - Run comparison engine (`RunComparisonEngine`) calculating absolute/percentage metric deltas, polarity-aware improvement detection (quality higher=better, latency lower=better), and benchmark leaderboards
+  - Automated grid sweep coordinator (`ExperimentTrackingService.run_grid_sweep`) testing retrieval strategy (dense vs hybrid) and top-k variations against golden benchmark datasets
+  - REST API endpoints (`POST /api/v1/experiments/runs`, `GET /api/v1/experiments/runs/{id}`, `GET /api/v1/experiments/runs`, `PUT /api/v1/experiments/runs/{id}`, `POST /api/v1/experiments/compare`, and `POST /api/v1/experiments/grid`)
+  - Integration with `RAGEvaluationService` for automated metric evaluation and run logging
 - [ ] **Milestone 17: Observability (Langfuse / OpenTelemetry)**
 - [ ] **Milestone 18: API Surface Polish & Rate Limiting**
 - [ ] **Milestone 19: End-to-End Testing & Mock Fixtures**
