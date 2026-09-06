@@ -542,7 +542,14 @@ mypy src tests
     4. Golden evaluation dataset retrieval $\to$ Baseline/Candidate experiment runs $\to$ Side-by-side metric comparison
   - Fault-injection and resilience testing (`tests/e2e/test_resilience_and_fault_injection.py`) testing transient upstream LLM retries (HTTP 504 recovery), hostile document delimiter defanging, and concurrent multithreaded rate limiter load (exact quota enforcement)
   - 100% test pass rate (340/340 tests passed) and 0 mypy static type errors across 207 source files
-- [ ] **Milestone 20: Docker & Docker Compose Infrastructure**
+- [x] **Milestone 20: Docker & Docker Compose Infrastructure**
+  - Production multi-stage `Dockerfile` (`builder` and `runtime` stages) based on `python:3.11-slim`, discarding compilers and build tools from final image
+  - Unprivileged non-root security hardening (`appuser:10001`) with restricted file ownership and minimal attack surface
+  - Container-native `HEALTHCHECK` probing `GET /health` with configurable interval, retries, and timeout
+  - Multi-container `docker-compose.yml` orchestrating the FastAPI application (`enterprise-agent-app`) and Qdrant vector database (`enterprise-agent-qdrant`) with isolated bridge network (`enterprise-agent-net`)
+  - Persistent named volumes for vector storage (`qdrant_storage`) and application state/experiments (`agent_data`)
+  - Container environment template `.env.docker.example` and optimized context exclusions in `.dockerignore`
+  - Automated infrastructure unit tests in `tests/unit/test_docker_infrastructure.py` (344/344 tests passing project-wide)
 - [ ] **Milestone 21: Synthetic Enterprise Knowledge Base**
 - [ ] **Milestone 22: Interactive Demonstration Scenarios**
 - [ ] **Milestone 23: Security & Credential Hardening**

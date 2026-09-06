@@ -1,0 +1,93 @@
+services:
+  # ==============================================================================
+  # Enterprise AI Agent - FastAPI Application Service
+  # ==============================================================================
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+    container_name: enterprise-agent-app
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - APP_ENV=production
+      - LOG_LEVEL=INFO
+      - HOST=0.0.0.0
+      - PORT=8000
+      - QDRANT_URL=http://qdrant:6333
+      - QDRANT_COLLECTION_NAME=enterprise_knowledge
+      - EXPERIMENTS_DB_PATH=/app/data/experiments.db
+      - SQLITE_DB_PATH=/app/data/enterprise.db
+      - RATE_LIMIT_ENABLED=true
+      - RATE_LIMIT_REQUESTS_PER_MINUTE=120
+      - RATE_LIMIT_BURST_LIMIT=30
+      - OBSERVABILITY_ENABLED=true
+      - OBSERVABILITY_EXPORTER=memory
+    volumes:
+      - agent_data:/app/data
+    depends_on:
+      qdrant:
+        condition: service_healthy
+    networks:
+      - enterprise-agent-net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2048M
+        reservations:
+          cpus: "0.5"
+          memory: 512M
+
+  # ==============================================================================
+  # Qdrant - Distributed Vector Database
+  # ==============================================================================
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: enterprise-agent-qdrant
+    restart: unless-stopped
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_storage:/qdrant/storage
+    networks:
+      - enterprise-agent-net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:6333/readyz || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2048M
+        reservations:
+          cpus: "0.5"
+          memory: 512M
+
+# ==============================================================================
+# Persistent Named Volumes
+# ==============================================================================
+volumes:
+  qdrant_storage:
+    driver: local
+  agent_data:
+    driver: local
+
+# ==============================================================================
+# Isolated Bridge Network
+# ==============================================================================
+networks:
+  enterprise-agent-net:
+    driver: bridge
