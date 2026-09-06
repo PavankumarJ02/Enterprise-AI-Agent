@@ -527,7 +527,12 @@ mypy src tests
   - OpenTelemetry HTTP JSON payload exporter (`OTLPSpanExporter`) compatible with OpenTelemetry Collector, Langfuse, Jaeger, and Datadog
   - Automatic instrumentation across RAG queries (`rag.query`), vector retrieval (`rag.retrieval`), and LLM synthesis (`rag.synthesis`)
   - REST API endpoints (`GET /api/v1/observability/traces`, `GET /api/v1/observability/traces/{trace_id}`, `DELETE /api/v1/observability/traces`, `GET /api/v1/observability/stats`)
-- [ ] **Milestone 18: API Surface Polish & Rate Limiting**
+- [x] **Milestone 18: API Surface Polish & Rate Limiting**
+  - Thread-safe sliding-window rate limiter (`SlidingWindowRateLimiter`) with burst protection and per-client tracking via IP / `X-API-Key`
+  - Standard HTTP 429 response formatting with `Retry-After`, `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and `X-RateLimit-Reset` headers
+  - Distributed request correlation ID middleware (`CorrelationIdMiddleware`) managing `X-Correlation-ID` context propagation
+  - OWASP defensive HTTP security headers middleware (`SecurityHeadersMiddleware`) enforcing `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy`, and scoped `Content-Security-Policy`
+  - Polished OpenAPI metadata with 14 comprehensive domain tags, enterprise contact info, and licensing specifications
 - [ ] **Milestone 19: End-to-End Testing & Mock Fixtures**
 - [ ] **Milestone 20: Docker & Docker Compose Infrastructure**
 - [ ] **Milestone 21: Synthetic Enterprise Knowledge Base**

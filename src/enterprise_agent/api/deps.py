@@ -15,6 +15,7 @@ from enterprise_agent.hybrid.service import HybridSearchService
 from enterprise_agent.ingestion.service import IngestionService
 from enterprise_agent.llm.base import LLMProvider
 from enterprise_agent.llm.factory import get_llm_provider
+from enterprise_agent.middleware.rate_limit import SlidingWindowRateLimiter
 from enterprise_agent.observability.service import ObservabilityService
 from enterprise_agent.observability.tracer import Tracer
 from enterprise_agent.rag.service import RAGService
@@ -69,6 +70,15 @@ _experiment_service_instance: ExperimentTrackingService | None = None
 # Module-level singleton instance of ObservabilityService
 _observability_service_instance: ObservabilityService | None = None
 
+# Module-level singleton instance of SlidingWindowRateLimiter
+_rate_limiter_instance: SlidingWindowRateLimiter | None = None
+
+
+def reset_rate_limiter() -> None:
+    """Reset singleton SlidingWindowRateLimiter for test isolation."""
+    global _rate_limiter_instance
+    _rate_limiter_instance = None
+
 
 def reset_observability_service() -> None:
     """Reset singleton ObservabilityService for test isolation."""
@@ -120,6 +130,19 @@ def get_tracer(
 ) -> Tracer:
     """Dependency provider yielding active Tracer engine."""
     return observability_service.tracer
+
+
+def get_rate_limiter(
+    settings: Settings = Depends(get_app_settings),
+) -> SlidingWindowRateLimiter:
+    """Dependency provider yielding singleton SlidingWindowRateLimiter."""
+    global _rate_limiter_instance
+    if _rate_limiter_instance is None:
+        _rate_limiter_instance = SlidingWindowRateLimiter(
+            requests_per_minute=settings.rate_limit_requests_per_minute,
+            burst_limit=settings.rate_limit_burst_limit,
+        )
+    return _rate_limiter_instance
 
 
 def get_llm(

@@ -401,6 +401,30 @@ class Settings(BaseSettings):
         description="Maximum number of recent traces retained in-memory for queries.",
     )
 
+    # -------------------------------------------------------------------------
+    # Rate Limiting & Security Headers Configuration
+    # -------------------------------------------------------------------------
+    rate_limit_enabled: bool = Field(
+        default=True,
+        description="Whether sliding-window API rate limiting is enforced.",
+    )
+    rate_limit_requests_per_minute: int = Field(
+        default=120,
+        ge=1,
+        le=10000,
+        description="Maximum allowed requests per client per rolling 60-second window.",
+    )
+    rate_limit_burst_limit: int = Field(
+        default=30,
+        ge=1,
+        le=1000,
+        description="Maximum allowed requests within a 1-second burst window.",
+    )
+    security_headers_enabled: bool = Field(
+        default=True,
+        description="Whether OWASP-recommended HTTP security headers are injected.",
+    )
+
     @property
     def is_production(self) -> bool:
         """Helper to check if running in production."""

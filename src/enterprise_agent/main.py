@@ -18,8 +18,70 @@ from enterprise_agent.core.exceptions import (
     LLMTimeoutError,
 )
 from enterprise_agent.core.logging import get_logger, setup_logging
+from enterprise_agent.middleware.correlation import CorrelationIdMiddleware
+from enterprise_agent.middleware.rate_limit import RateLimitMiddleware, SlidingWindowRateLimiter
+from enterprise_agent.middleware.security import SecurityHeadersMiddleware
 
 logger = get_logger(__name__)
+
+OPENAPI_TAGS = [
+    {
+        "name": "Health",
+        "description": "Liveness and readiness probes for infrastructure monitoring.",
+    },
+    {
+        "name": "Chat & Direct LLM",
+        "description": "Direct conversational inference and real-time SSE streaming.",
+    },
+    {
+        "name": "Document Ingestion",
+        "description": "Multi-format parsing, sanitization, recursive chunking, and deduplication.",
+    },
+    {
+        "name": "Embeddings",
+        "description": "Dense vector generation and batch vectorization pipelines.",
+    },
+    {
+        "name": "Semantic Search",
+        "description": "Qdrant vector ANN retrieval and hybrid keyword/dense search.",
+    },
+    {
+        "name": "Retrieval-Augmented Generation",
+        "description": "Grounded synthesis with exact sentence citations and factual verification.",
+    },
+    {
+        "name": "Query Transformation",
+        "description": "HyDE, Multi-Query expansion, and Step-Back query abstractions.",
+    },
+    {
+        "name": "Autonomous Agent",
+        "description": "Multi-turn ReAct reasoning with safe tool execution.",
+    },
+    {
+        "name": "SQL Database",
+        "description": "Read-only enterprise database introspection and analytical queries.",
+    },
+    {
+        "name": "Semantic Query Router",
+        "description": "3-tier intent classification and multi-subsystem dispatch.",
+    },
+    {
+        "name": "Guardrails & Safety",
+        "description": "PII redaction, prompt injection defense, and canary token management.",
+    },
+    {
+        "name": "RAG Evaluation",
+        "description": "Automated Ragas-style quantitative evaluation against golden benchmarks.",
+    },
+    {
+        "name": "Experiment Tracking",
+        "description": "Benchmark run persistence, delta comparisons, and parameter grid sweeps.",
+    },
+    {
+        "name": "Observability & Distributed Tracing",
+        "description": "OpenTelemetry and Langfuse distributed tracing, spans, and metrics.",
+    },
+]
 
 
 @asynccontextmanager
@@ -49,6 +111,14 @@ def create_application(settings: Settings | None = None) -> FastAPI:
             "Production-oriented Enterprise AI Knowledge & Decision Agent providing "
             "adaptive retrieval, tool-augmented reasoning, and safe analytical execution."
         ),
+        openapi_tags=OPENAPI_TAGS,
+        contact={
+            "name": "Enterprise AI Platform Team",
+            "email": "ai-platform@enterprise.internal",
+        },
+        license_info={
+            "name": "Enterprise Proprietary License",
+        },
         lifespan=lifespan,
     )
 
@@ -58,8 +128,13 @@ def create_application(settings: Settings | None = None) -> FastAPI:
         app.dependency_overrides[get_app_settings] = lambda: app_settings
 
     # -------------------------------------------------------------------------
-    # Middlewares
+    # Middlewares (Reverse Execution: Correlation -> Security -> RateLimit -> CORS)
     # -------------------------------------------------------------------------
+    rate_limiter = SlidingWindowRateLimiter(
+        requests_per_minute=app_settings.rate_limit_requests_per_minute,
+        burst_limit=app_settings.rate_limit_burst_limit,
+    )
+
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
@@ -67,6 +142,16 @@ def create_application(settings: Settings | None = None) -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    app.add_middleware(
+        SecurityHeadersMiddleware,
+        enabled=app_settings.security_headers_enabled,
+    )
+    app.add_middleware(
+        RateLimitMiddleware,
+        limiter=rate_limiter,
+        enabled=app_settings.rate_limit_enabled,
+    )
+    app.add_middleware(CorrelationIdMiddleware)
 
     # -------------------------------------------------------------------------
     # Exception Handlers
