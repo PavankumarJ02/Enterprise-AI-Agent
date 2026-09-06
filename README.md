@@ -93,15 +93,55 @@ d:/PROJECT/Enterprise AI Agent/
 │       │   ├── __init__.py
 │       │   ├── exceptions.py        # Domain exception hierarchy
 │       │   └── logging.py           # Structured logger configuration
+│       ├── embeddings/              # Dense vector embedding providers & batching
+│       │   ├── __init__.py
+│       │   ├── base.py              # EmbeddingProvider ABC & EmbeddingResult
+│       │   ├── factory.py           # Provider and service factory
+│       │   ├── gemini.py            # Gemini text-embedding-004 provider
+│       │   ├── mock.py              # Deterministic L2-normalized mock provider
+│       │   ├── openai.py            # OpenAI text-embedding-3-small provider
+│       │   └── service.py           # EmbeddingsService batch coordinator
+│       ├── ingestion/               # Document ingestion, parsing, chunking
+│       │   ├── __init__.py
+│       │   ├── models.py            # Document, DocumentChunk, IngestionResult models
+│       │   ├── sanitization.py      # Untrusted text defense & delimiter neutralizing
+│       │   ├── service.py           # IngestionService coordinator & deduplication
+│       │   ├── chunking/            # Chunking strategies
+│       │   │   ├── __init__.py
+│       │   │   ├── base.py          # BaseChunker ABC
+│       │   │   └── recursive.py     # RecursiveCharacterChunker with page mapping
+│       │   └── parsers/             # Multi-format parsers
+│       │       ├── __init__.py
+│       │       ├── base.py          # BaseDocumentParser ABC & ParsedDocument
+│       │       ├── factory.py       # Parser resolution factory
+│       │       ├── markdown.py      # Markdown parser with H1 & section tracking
+│       │       ├── pdf.py           # PDF parser with page tracking (pypdf)
+│       │       └── text.py          # Plain text parser with encoding fallback
 │       ├── llm/                     # LLM Provider Abstraction
 │       │   ├── __init__.py
 │       │   ├── base.py              # LLMProvider interface & data contracts
+│       │   ├── gemini_client.py     # Google Gemini native provider (google-genai SDK)
 │       │   ├── openai_client.py     # OpenAI-compatible asynchronous implementation
 │       │   ├── mock_client.py       # Deterministic mock provider for tests & offline dev
 │       │   └── factory.py           # Factory resolving provider via settings
 │       ├── schemas/                 # Request & Response contracts
 │       │   ├── __init__.py
-│       │   └── chat.py              # ChatRequest, ChatResponse, TokenUsage
+│       │   ├── chat.py              # ChatRequest, ChatResponse, TokenUsage
+│       │   ├── documents.py         # IngestTextRequest, IngestResponse, DocumentChunkResponse
+│       │   ├── embeddings.py        # EmbedTextsRequest, EmbedTextsResponse, EmbedQueryRequest
+│       │   ├── rag.py               # RAGQueryRequest, RAGQueryResponse, RetrievedSourceChunk
+│       │   └── search.py            # SemanticSearchRequest, SemanticSearchResponse, IndexDocumentResponse
+│       ├── rag/                     # Retrieval-Augmented Generation subsystem
+│       │   ├── __init__.py
+│       │   ├── context.py           # RAGContextAssembler with dynamic token budgeting
+│       │   ├── prompts.py           # RAGPromptBuilder & enterprise anti-hallucination guardrails
+│       │   └── service.py           # RAGService coordinating vector search & LLM answer synthesis
+│       ├── vectorstore/             # Vector database storage & ANN semantic retrieval
+│       │   ├── __init__.py
+│       │   ├── base.py              # VectorStore ABC & SearchResult domain models
+│       │   ├── factory.py           # AsyncQdrantClient & VectorStore resolution factory
+│       │   ├── qdrant.py            # QdrantVectorStore adapter with Cosine distance & payload filtering
+│       │   └── service.py           # VectorSearchService indexing & semantic query coordinator
 │       ├── api/                     # Presentation layer
 │       │   ├── __init__.py
 │       │   ├── deps.py              # Dependency injection providers
@@ -109,18 +149,33 @@ d:/PROJECT/Enterprise AI Agent/
 │       │       ├── __init__.py
 │       │       ├── api.py           # v1 router aggregator
 │       │       ├── health.py        # GET /api/v1/health & upstream probe
-│       │       └── chat.py          # POST /api/v1/chat direct generation
+│       │       ├── chat.py          # POST /api/v1/chat & POST /api/v1/chat/stream
+│       │       ├── documents.py     # POST /documents/ingest/text, /file, GET /documents, /index, DELETE
+│       │       ├── embeddings.py    # POST /embeddings, POST /embeddings/query
+│       │       ├── rag.py           # POST /rag/query, POST /rag/stream
+│       │       └── search.py        # POST /search/semantic
 │       └── main.py                  # FastAPI app factory, lifespan, & error handlers
 └── tests/
     ├── __init__.py
     ├── conftest.py                  # Pytest fixtures and mock client setup
     ├── unit/
     │   ├── __init__.py
+    │   ├── test_chunking.py         # Recursive chunker & deduplication unit tests
     │   ├── test_config.py           # Settings validation unit tests
-    │   └── test_llm_service.py      # LLM abstraction & error mapping unit tests
+    │   ├── test_embeddings.py       # Embedding providers & batching unit tests
+    │   ├── test_gemini_service.py   # Gemini message conversion & error mapping unit tests
+    │   ├── test_llm_service.py      # LLM abstraction & error mapping unit tests
+    │   ├── test_parsers.py          # Text, Markdown, and PDF parser unit tests
+    │   ├── test_rag.py              # RAG prompt, context assembler, & service unit tests
+    │   ├── test_sanitization.py     # Document text security sanitization tests
+    │   └── test_vectorstore.py      # Qdrant vector store & ANN search unit tests
     └── integration/
         ├── __init__.py
-        └── test_chat_api.py         # FastAPI endpoints integration tests
+        ├── test_chat_api.py         # Direct & SSE streaming endpoints integration tests
+        ├── test_documents_api.py    # Document ingestion & chunk inspection API tests
+        ├── test_embeddings_api.py   # Dense embeddings batch & query API tests
+        ├── test_rag_api.py          # Grounded RAG query & token streaming integration tests
+        └── test_search_api.py       # Semantic vector search & indexing API tests
 ```
 
 ---
@@ -154,7 +209,14 @@ Copy `.env.example` to `.env`. By default, `LLM_PROVIDER="mock"` is enabled so y
 cp .env.example .env
 ```
 
-To switch to a live model (e.g. OpenAI or Groq), update `.env`:
+To switch to **Google Gemini** (recommended):
+```env
+LLM_PROVIDER="gemini"
+LLM_MODEL="gemini-2.5-flash"
+GEMINI_API_KEY="AIzaSyYourGeminiKeyHere..."
+```
+
+To switch to **OpenAI / Groq / Ollama**:
 ```env
 LLM_PROVIDER="openai"
 LLM_MODEL="gpt-4o-mini"
@@ -191,7 +253,7 @@ curl -X GET http://localhost:8000/api/v1/health
 }
 ```
 
-### Submit Chat Query (`/api/v1/chat`)
+### Submit Direct Chat Query (`POST /api/v1/chat`)
 ```bash
 curl -X POST http://localhost:8000/api/v1/chat \
   -H "Content-Type: application/json" \
@@ -204,16 +266,119 @@ curl -X POST http://localhost:8000/api/v1/chat \
 **Response:**
 ```json
 {
-  "answer": "[MOCK RESPONSE] Processed query: 'What is our company vacation policy?'. Result: This is a simulated response from the enterprise MockLLMProvider.",
-  "model": "gpt-4o-mini",
+  "answer": "Standard vacation allowance is 20 days annually...",
+  "model": "gemini-2.5-flash",
   "usage": {
     "prompt_tokens": 12,
     "completion_tokens": 40,
     "total_tokens": 52
   },
-  "latency_ms": 0.15,
+  "latency_ms": 312.45,
   "status": "success"
 }
+```
+
+### Stream Live Tokens over Server-Sent Events (`POST /api/v1/chat/stream`)
+```bash
+curl -N -X POST http://localhost:8000/api/v1/chat/stream \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "Explain how the quarterly bonus calculation works."
+  }'
+```
+
+### Ingest Plain Text or Markdown (`POST /api/v1/documents/ingest/text`)
+```bash
+curl -X POST http://localhost:8000/api/v1/documents/ingest/text \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "Corporate Refund Policy",
+    "content": "# Customer Refund Policy\n\nFull refunds are issued within 30 calendar days of delivery.",
+    "source": "handbook_2026.md"
+  }'
+```
+**Response:**
+```json
+{
+  "document_id": "709befc4-f87f-44b4-a94c-60bf50e7779d",
+  "title": "Corporate Refund Policy",
+  "source": "handbook_2026.md",
+  "num_chunks": 1,
+  "total_characters": 83,
+  "checksum": "8b7793bc511d48d19bab46ba16a6a307c0c5d8d49efa4639f0b34a36f7ae3e97",
+  "status": "success",
+  "message": "Successfully ingested and produced 1 chunks."
+}
+```
+
+### Upload and Ingest Document File (`POST /api/v1/documents/ingest/file`)
+```bash
+curl -X POST http://localhost:8000/api/v1/documents/ingest/file \
+  -F "file=@./docs/company_policy.pdf"
+```
+
+### List Ingested Documents (`GET /api/v1/documents`)
+```bash
+curl -X GET http://localhost:8000/api/v1/documents
+```
+
+### Inspect Document Chunks (`GET /api/v1/documents/{document_id}/chunks`)
+```bash
+curl -X GET http://localhost:8000/api/v1/documents/709befc4-f87f-44b4-a94c-60bf50e7779d/chunks
+```
+
+### Generate Dense Embeddings (`POST /api/v1/embeddings`)
+```bash
+curl -X POST http://localhost:8000/api/v1/embeddings \
+  -H "Content-Type: application/json" \
+  -d '{
+    "texts": ["Enterprise cloud architecture", "High availability vector search"],
+    "batch_size": 32
+  }'
+```
+
+### Semantic Vector Search (`POST /api/v1/search/semantic`)
+```bash
+curl -X POST http://localhost:8000/api/v1/search/semantic \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "What is the policy for hotel expenses and flight booking?",
+    "top_k": 5,
+    "min_score": 0.0,
+    "filters": {"department": "Operations"}
+  }'
+```
+
+### Grounded RAG Query (`POST /api/v1/rag/query`)
+```bash
+curl -X POST http://localhost:8000/api/v1/rag/query \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "What is the monthly internet allowance and initial equipment reimbursement?",
+    "top_k": 3,
+    "min_score": 0.0,
+    "filters": {"department": "People & Culture"}
+  }'
+```
+
+### Real-Time Streaming RAG Query (`POST /api/v1/rag/stream`)
+```bash
+curl -N -X POST http://localhost:8000/api/v1/rag/stream \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "What are the rules for travel reimbursement?",
+    "top_k": 3
+  }'
+```
+
+### Explicitly Index Ingested Document (`POST /api/v1/documents/{id}/index`)
+```bash
+curl -X POST http://localhost:8000/api/v1/documents/709befc4-f87f-44b4-a94c-60bf50e7779d/index
+```
+
+### Delete Document & Purge Vectors (`DELETE /api/v1/documents/{id}`)
+```bash
+curl -X DELETE http://localhost:8000/api/v1/documents/709befc4-f87f-44b4-a94c-60bf50e7779d
 ```
 
 ---
@@ -244,20 +409,109 @@ mypy src tests
   - Decoupled `LLMProvider` interface with OpenAI-compatible & Mock implementations
   - Base `/api/v1/chat` and `/api/v1/health` endpoints
   - High-coverage unit and integration test suite
-- [ ] **Milestone 2: LLM Streaming & Service Enhancements**
-- [ ] **Milestone 3: Enterprise Document Ingestion (PDF, Markdown, DOCX)**
-- [ ] **Milestone 4: Embedding Service Abstraction**
-- [ ] **Milestone 5: Qdrant Vector Store Integration**
-- [ ] **Milestone 6: Baseline RAG Pipeline**
-- [ ] **Milestone 7: Exact Document Citations & Grounding**
-- [ ] **Milestone 8: Hybrid Search with Elasticsearch (BM25 + Dense)**
-- [ ] **Milestone 9: Cross-Encoder Reranking**
-- [ ] **Milestone 10: Query Transformation (HyDE, Multi-Query, Step-Back)**
-- [ ] **Milestone 11: Tool-Augmented Agent Engine**
-- [ ] **Milestone 12: Safe Read-Only SQL Database Tool**
-- [ ] **Milestone 13: Semantic Query Router**
-- [ ] **Milestone 14: Enterprise Guardrails & Prompt-Injection Defense**
-- [ ] **Milestone 15: RAG Evaluation with Ragas & Custom Metrics**
+- [x] **Milestone 2: Google Gemini Integration & Real-Time Streaming**
+  - First-class Google Gemini integration via official `google-genai` SDK (`GeminiLLMProvider`)
+  - Server-Sent Events (SSE) `/api/v1/chat/stream` real-time token streaming
+  - Transient failure resilience with exponential backoff (`tenacity`)
+  - Support for `gemini-2.5-flash`, `gemini-1.5-flash`, and `gemini-1.5-pro`
+- [x] **Milestone 3: Enterprise Document Ingestion & Recursive Chunking**
+  - Multi-format document parsers (PDF with `pypdf`, Markdown with H1/section extraction, plain text)
+  - Security sanitization pipeline (zero-width steganography stripping, null bytes removal, prompt injection delimiter defanging)
+  - Recursive character chunker with overlap and exact page range mapping
+  - Document ingestion API (`POST /api/v1/documents/ingest/text`, `POST /api/v1/documents/ingest/file`, `GET /api/v1/documents`, `GET /api/v1/documents/{id}/chunks`)
+  - Content-addressed SHA-256 deduplication
+- [x] **Milestone 4: Vector Embeddings Pipeline & Batch Vectorization**
+  - Multi-provider dense embedding abstraction (`EmbeddingProvider` ABC)
+  - Google Gemini `text-embedding-004` (768 dims) with asymmetric task conditioning (`RETRIEVAL_DOCUMENT` vs `RETRIEVAL_QUERY`)
+  - OpenAI `text-embedding-3-small` / `text-embedding-3-large` (1536 dims)
+  - Deterministic L2 unit-normalized offline mock provider (`MockEmbeddingProvider`)
+  - Batch slicing coordinator (`EmbeddingsService`) with token tracking & rate limit protection
+  - REST API endpoints (`POST /api/v1/embeddings`, `POST /api/v1/embeddings/query`)
+- [x] **Milestone 5: Qdrant Vector Store Integration & Semantic Search**
+  - High-concurrency vector store abstraction (`VectorStore` ABC)
+  - Qdrant integration (`QdrantVectorStore`) with native dual mode: zero-docker in-memory (`:memory:`) & remote server/cloud
+  - HNSW index support with Cosine distance metric and deterministic UUIDv5 point mapping
+  - Pre-filtered single-stage metadata payload indexing (`document_id`, `source`, department tags)
+  - End-to-end `VectorSearchService` coordinating embedding generation, indexing, and ANN retrieval
+  - REST API endpoint (`POST /api/v1/search/semantic`, `POST /documents/{id}/index`, `DELETE /documents/{id}`)
+  - Auto-indexing integration on document ingestion (`auto_index=true`)
+- [x] **Milestone 6: Baseline RAG Pipeline & Streaming Synthesis**
+  - Grounded prompt engineering with strict anti-hallucination enterprise guardrails
+  - Dynamic context assembler (`RAGContextAssembler`) with greedy relevance sorting & token budgeting
+  - RAG orchestration engine (`RAGService`) connecting Qdrant vector retrieval and LLM generation
+  - Zero-match short-circuit optimization saving latency and LLM token costs
+  - Synchronous endpoint (`POST /api/v1/rag/query`) returning answer, cited source chunks, and telemetry
+  - Real-time token streaming (`POST /api/v1/rag/stream`) with upfront SSE source citations
+- [x] **Milestone 7: Exact Document Citations & Grounding Verification**
+  - Deterministic sentence boundary segmenter (`SentenceSplitter`) with abbreviation awareness
+  - Regex citation marker extractor (`CitationExtractor`) supporting `[Source N]`, `[Doc N]`, and multi-source tags
+  - Claim-to-chunk factual grounding verifier (`GroundingVerifier`) combining token recall, Jaccard similarity, numeric entity checks, and bigram overlap
+  - Extractive quote locator isolating the exact supporting chunk passage (`quote_snippet`)
+  - Faithfulness score calculation (0.0 to 1.0) and status classification (`verified`, `partially_grounded`, `unverified`, `insufficient_context`)
+- [x] **Milestone 8: Hybrid Search with Elasticsearch (BM25 + Dense Qdrant)**
+  - Sparse lexical store abstraction (`SparseStore` ABC)
+  - Native in-memory BM25 store (`InMemoryBM25Store`) with Lucene positive-IDF formula and code-preserving tokenizer
+  - Production cluster adapter (`ElasticsearchStore`) with text analyzer mappings and metadata bool filters
+  - Rank fusion algorithms: Reciprocal Rank Fusion (`reciprocal_rank_fusion` with $k=60$) and normalized linear score combination (`linear_score_fusion`)
+  - End-to-end `HybridSearchService` running dense and sparse retrieval concurrently via `asyncio.gather`
+  - Dual-store indexing and purge synchronization on document ingestion and deletion
+  - REST API endpoints: `POST /api/v1/search/hybrid` and `POST /api/v1/search/sparse`
+- [x] **Milestone 9: Cross-Encoder Reranking & Two-Stage Retrieval**
+  - Standardized asynchronous cross-encoder interface contract (`Reranker` ABC)
+  - Ultra-fast CPU ONNX model execution (`FlashRankReranker`) using `ms-marco-TinyBERT-L-2-v2` with `asyncio.to_thread` non-blocking execution
+  - Deterministic testing implementation (`MockReranker`) with token overlap heuristics and forced score overrides
+  - Cached singleton factory (`create_reranker`) driven by Pydantic Settings
+  - `TwoStageRetrievalService` orchestrating Stage 1 coarse recall ($K_1$) across hybrid/dense/sparse and Stage 2 fine reranking ($K_2$)
+  - Enriched search schemas with `rerank_score`, `initial_rank`, `final_rank`, and `initial_score` telemetry
+  - REST API endpoints: `POST /api/v1/search/rerank` and `POST /api/v1/search/rerank/direct`
+- [x] **Milestone 10: Query Transformation (HyDE, Multi-Query, Step-Back)**
+  - Abstract transformation contract (`QueryTransformer` ABC)
+  - Hypothetical Document Embeddings (`HyDETransformer`) generating synthetic answers to bridge question-answer vector space asymmetry
+  - Query expansion & perspective decomposition (`MultiQueryTransformer`) with automated bullet/numbering stripping and deduplication
+  - Problem abstraction (`StepBackTransformer`) deriving broader foundational/architectural questions with conceptual rationales
+  - Orchestration service (`QueryTransformationService`) unifying transformation strategies with concurrent retrieval, deduplication, and cross-encoder reranking
+  - REST API endpoints: `POST /api/v1/transform/hyde`, `POST /api/v1/transform/multi-query`, `POST /api/v1/transform/step-back`, `POST /api/v1/transform/search`
+- [x] **Milestone 11: Tool-Augmented Agent Engine**
+  - ReAct (Thought-Action-Observation) loop orchestrator (`AgentService`) with stateful scratchpad
+  - Extensible tool abstraction (`BaseTool` ABC & `ToolResult` model) and centralized `ToolRegistry`
+  - Safe mathematical evaluation tool (`CalculatorTool`) using AST whitelisting (zero `eval()` injection risk)
+  - UTC telemetry and calendar tool (`CurrentTimeTool`)
+  - Two-stage hybrid search tool (`KnowledgeSearchTool`) linking agent directly into enterprise RAG pipeline
+  - Resilient agent output parser (`parse_agent_output`) handling markdown fences, thoughts, actions, and fallbacks
+  - Synchronous execution (`POST /api/v1/agent/chat`) and real-time SSE streaming (`POST /api/v1/agent/stream`)
+  - Tool inspection API (`GET /api/v1/agent/tools`) exposing JSON Schemas
+- [x] **Milestone 12: Safe Read-Only SQL Database Tool**
+  - AST-based SQL security validator (`SQLValidator`) powered by `sqlparse` enforcing single-statement `SELECT`/`WITH` queries
+  - Multi-tier mutation and DDL defense rejecting `DROP`, `DELETE`, `UPDATE`, `INSERT`, `ALTER`, `ATTACH`, `PRAGMA`, and file I/O functions
+  - Driver-level defense-in-depth via SQLite URI read-only connection pooling (`file:...mode=ro`)
+  - Synthetic enterprise database seeder (`seed_enterprise_db`) generating 4 relational tables (`departments`, `employees`, `products`, `sales_orders`)
+  - Row truncation detection and limit clamping (`sql_max_rows`) preventing context window overflow
+  - Schema inspection tool (`SQLSchemaTool`) and query execution tool (`SQLQueryTool`) registered in agent `ToolRegistry`
+  - REST API endpoints: `GET /api/v1/sql/schema` and `POST /api/v1/sql/query`
+  - Multi-step agent integration tests verifying schema introspection, SQL execution, and reasoning
+- [x] **Milestone 13: Semantic Query Router**
+  - Intent classification across 4 specialized enterprise routing targets: `direct_chat`, `rag_search`, `sql_database`, and `autonomous_agent`
+  - High-speed heuristic regex router (`HeuristicRouter`) bypassing LLM overhead for greetings, simple chitchat, compound tasks, and explicit policy lookups
+  - Dense semantic cosine embedding router (`SemanticEmbeddingRouter`) classifying queries against curated exemplars via vector similarity thresholding
+  - Zero-shot LLM intent classifier (`LLMRouter`) with structured JSON reasoning for ambiguous, multi-domain, or complex queries
+  - Cascade orchestration engine (`QueryRouterService`) executing a 3-tier cascade (Heuristics -> Semantic Embedding -> Zero-Shot LLM) with strategy overrides
+  - Automatic subsystem dispatch seamlessly executing and formatting payloads from Direct Chat, `RAGService`, `SQLDatabaseService`, or `AgentService`
+  - REST API endpoints: `POST /api/v1/router/classify` and `POST /api/v1/router/dispatch`
+- [x] **Milestone 14: Enterprise Guardrails & Prompt-Injection Defense**
+  - Bidirectional security guardrails pipeline inspecting untrusted user inputs and generated model outputs
+  - High-accuracy regex & Luhn-validated PII detection and redaction engine (`PIIRedactor`) masking SSNs, credit cards, emails, phone numbers, and API keys (`sk-*`, `ghp_*`, `AKIA*`)
+  - Multi-pattern prompt injection & jailbreak scanner (`PromptInjectionDetector`) flagging directive overrides, DAN modes, roleplay hijacks, base64 obfuscated payloads, and delimiter breakouts
+  - Dynamic canary token injection and prompt leakage detection (`CanaryTokenManager`) preventing confidential system instruction exfiltration
+  - Centralized orchestration service (`GuardrailsService`) enforcing automated blocking, sanitization, and violation telemetry
+- [x] **Milestone 15: RAG Evaluation with Ragas & Custom Metrics**
+  - Quantitative RAG evaluation framework implementing the 4 foundational metrics: Faithfulness, Answer Relevance, Context Precision, and Context Recall
+  - Claim-to-context factual entailment scoring (`calculate_faithfulness`) detecting hallucinations and unsupported assertions
+  - Semantic and lexical answer relevance computation (`calculate_answer_relevance`) measuring question alignment and intent coverage
+  - Context Precision metric (`calculate_context_precision`) calculating Mean Average Precision (MAP@K) of retrieved passages
+  - Context Recall metric (`calculate_context_recall`) measuring ground-truth statement coverage across retrieved contexts
+  - Curated 10-query enterprise golden benchmark dataset (`ENTERPRISE_BENCHMARK_DATASET`) covering HR stipends, travel limits, SOC2 controls, and security policies
+  - Evaluation orchestration engine (`RAGEvaluationService`) computing sample-level scores and dataset-level statistical summaries (mean, min, max, threshold verification)
+  - REST API endpoints: `POST /api/v1/evaluation/run` and `GET /api/v1/evaluation/dataset`
 - [ ] **Milestone 16: Experiment Tracking & Benchmarking**
 - [ ] **Milestone 17: Observability (Langfuse / OpenTelemetry)**
 - [ ] **Milestone 18: API Surface Polish & Rate Limiting**

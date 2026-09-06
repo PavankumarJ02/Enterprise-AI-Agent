@@ -1,12 +1,11 @@
-"""Integration tests for FastAPI endpoints."""
-
-from unittest.mock import AsyncMock
+from collections.abc import AsyncIterator
+from unittest.mock import AsyncMock, MagicMock
 
 from fastapi.testclient import TestClient
 
 from enterprise_agent.api.deps import get_llm
 from enterprise_agent.core.exceptions import LLMAuthenticationError, LLMRateLimitError
-from enterprise_agent.llm.base import LLMProvider
+from enterprise_agent.llm.base import LLMProvider, LLMStreamChunk
 
 
 def test_health_endpoints(test_client: TestClient) -> None:
@@ -107,5 +106,37 @@ def test_chat_endpoint_rate_limit_error_handling(test_client: TestClient) -> Non
         assert response.status_code == 429
         data = response.json()
         assert data["error"] == "LLM_RATE_LIMIT"
+    finally:
+        test_client.app.dependency_overrides.pop(get_llm, None)  # type: ignore[attr-defined]
+
+
+def test_chat_stream_success(test_client: TestClient) -> None:
+    """Verify POST /api/v1/chat/stream streams SSE chunks and finishes with [DONE]."""
+    payload = {"query": "Tell me a short policy overview."}
+    response = test_client.post("/api/v1/chat/stream", json=payload)
+
+    assert response.status_code == 200
+    assert "text/event-stream" in response.headers["content-type"]
+
+    content = response.text
+    assert "data: " in content
+    assert "data: [DONE]" in content
+
+
+def test_chat_stream_error(test_client: TestClient) -> None:
+    """Verify errors encountered during streaming yield structured SSE error event."""
+    mock_failing_llm = MagicMock(spec=LLMProvider)
+
+    async def failing_stream(*args: object, **kwargs: object) -> AsyncIterator[LLMStreamChunk]:
+        raise RuntimeError("Streaming connection dropped")
+        yield LLMStreamChunk(delta_text="")
+
+    mock_failing_llm.stream = failing_stream
+    test_client.app.dependency_overrides[get_llm] = lambda: mock_failing_llm  # type: ignore[attr-defined]
+
+    try:
+        response = test_client.post("/api/v1/chat/stream", json={"query": "Stream test"})
+        assert response.status_code == 200
+        assert "STREAM_ERROR" in response.text
     finally:
         test_client.app.dependency_overrides.pop(get_llm, None)  # type: ignore[attr-defined]
