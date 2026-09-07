@@ -20,6 +20,7 @@ from enterprise_agent.llm.factory import get_llm_provider
 from enterprise_agent.middleware.rate_limit import SlidingWindowRateLimiter
 from enterprise_agent.observability.service import ObservabilityService
 from enterprise_agent.observability.tracer import Tracer
+from enterprise_agent.performance.cache import QueryEmbeddingCache, RetrievalCache
 from enterprise_agent.rag.service import RAGService
 from enterprise_agent.reranking.base import Reranker
 from enterprise_agent.reranking.factory import create_reranker
@@ -91,6 +92,17 @@ _rate_limiter_instance: SlidingWindowRateLimiter | None = None
 # Module-level singleton instances for API Key Store and Manager
 _api_key_store_instance: APIKeyStore | None = None
 _api_key_manager_instance: APIKeyManager | None = None
+
+# Module-level singleton instances for Performance Caches
+_embedding_cache_instance: QueryEmbeddingCache | None = None
+_retrieval_cache_instance: RetrievalCache | None = None
+
+
+def reset_performance_caches() -> None:
+    """Reset singleton performance caches for test isolation."""
+    global _embedding_cache_instance, _retrieval_cache_instance
+    _embedding_cache_instance = None
+    _retrieval_cache_instance = None
 
 
 def reset_security_services() -> None:
@@ -184,11 +196,42 @@ def get_ingestion_service() -> IngestionService:
     return _ingestion_service_instance
 
 
+def get_embedding_cache(
+    settings: Settings = Depends(get_app_settings),
+) -> QueryEmbeddingCache | None:
+    """Dependency provider yielding singleton QueryEmbeddingCache if caching enabled."""
+    global _embedding_cache_instance
+    if not settings.performance_cache_enabled:
+        return None
+    if _embedding_cache_instance is None:
+        _embedding_cache_instance = QueryEmbeddingCache(
+            max_size=settings.performance_cache_max_size,
+            ttl_seconds=float(settings.performance_cache_ttl_seconds),
+        )
+    return _embedding_cache_instance
+
+
+def get_retrieval_cache(
+    settings: Settings = Depends(get_app_settings),
+) -> RetrievalCache | None:
+    """Dependency provider yielding singleton RetrievalCache if caching enabled."""
+    global _retrieval_cache_instance
+    if not settings.performance_cache_enabled:
+        return None
+    if _retrieval_cache_instance is None:
+        _retrieval_cache_instance = RetrievalCache(
+            max_size=settings.performance_cache_max_size,
+            ttl_seconds=float(settings.performance_cache_ttl_seconds),
+        )
+    return _retrieval_cache_instance
+
+
 def get_embeddings(
     settings: Settings = Depends(get_app_settings),
+    cache: QueryEmbeddingCache | None = Depends(get_embedding_cache),
 ) -> EmbeddingsService:
     """Dependency provider yielding the configured EmbeddingsService."""
-    return get_embeddings_service(settings)
+    return get_embeddings_service(settings, cache=cache)
 
 
 def get_vector_store(
@@ -283,12 +326,14 @@ def get_two_stage_retrieval_service(
     hybrid_service: HybridSearchService = Depends(get_hybrid_search_service),
     vector_service: VectorSearchService = Depends(get_vector_search_service),
     reranker: Reranker = Depends(get_reranker),
+    cache: RetrievalCache | None = Depends(get_retrieval_cache),
 ) -> TwoStageRetrievalService:
     """Dependency provider yielding the TwoStageRetrievalService."""
     return TwoStageRetrievalService(
         hybrid_service=hybrid_service,
         vector_service=vector_service,
         reranker=reranker,
+        cache=cache,
     )
 
 

@@ -2,6 +2,7 @@
 
 from enterprise_agent.core.logging import get_logger
 from enterprise_agent.hybrid.service import HybridSearchService
+from enterprise_agent.performance.cache import RetrievalCache
 from enterprise_agent.reranking.base import Reranker
 from enterprise_agent.schemas.search import (
     DirectRerankRequest,
@@ -22,13 +23,25 @@ class TwoStageRetrievalService:
         hybrid_service: HybridSearchService,
         vector_service: VectorSearchService,
         reranker: Reranker,
+        cache: RetrievalCache | None = None,
     ) -> None:
         self.hybrid_service = hybrid_service
         self.vector_service = vector_service
         self.reranker = reranker
+        self.cache = cache
 
     async def retrieve_and_rerank(self, request: RerankRequest) -> RerankResponse:
-        """Execute two-stage retrieval: candidate pool -> Cross-Encoder reranking."""
+        """Execute two-stage retrieval: candidate pool -> Cross-Encoder reranking with caching."""
+        # 1. Check RetrievalCache if present
+        if self.cache is not None:
+            cached_dump = self.cache.get_retrieval(
+                query=request.query,
+                top_k=request.top_k,
+                alpha=request.dense_weight,
+            )
+            if cached_dump is not None and isinstance(cached_dump, dict):
+                logger.debug("Retrieval cache hit for query: '%.30s...'", request.query)
+                return RerankResponse.model_validate(cached_dump)
         candidate_k = max(request.candidate_k, request.top_k)
         strategy = request.retrieval_strategy.lower()
 
@@ -72,7 +85,7 @@ class TwoStageRetrievalService:
         # Short-circuit if no candidates matched Stage 1
         if not candidates:
             logger.info("Zero candidates retrieved in Stage 1 for query: '%s'", request.query)
-            return RerankResponse(
+            empty_resp = RerankResponse(
                 query=request.query,
                 total_candidates=0,
                 total_results=0,
@@ -80,6 +93,14 @@ class TwoStageRetrievalService:
                 model=self.reranker.model_name,
                 results=[],
             )
+            if self.cache is not None:
+                self.cache.set_retrieval(
+                    query=request.query,
+                    top_k=request.top_k,
+                    results=empty_resp.model_dump(),
+                    alpha=request.dense_weight,
+                )
+            return empty_resp
 
         # Stage 2: Cross-Encoder fine reranking
         reranked = await self.reranker.rerank(
@@ -95,7 +116,7 @@ class TwoStageRetrievalService:
             self.reranker.model_name,
         )
 
-        return RerankResponse(
+        response = RerankResponse(
             query=request.query,
             total_candidates=len(candidates),
             total_results=len(reranked),
@@ -103,6 +124,16 @@ class TwoStageRetrievalService:
             model=self.reranker.model_name,
             results=reranked,
         )
+
+        if self.cache is not None:
+            self.cache.set_retrieval(
+                query=request.query,
+                top_k=request.top_k,
+                results=response.model_dump(),
+                alpha=request.dense_weight,
+            )
+
+        return response
 
     async def direct_rerank(self, request: DirectRerankRequest) -> RerankResponse:
         """Rerank an explicitly provided candidate list without performing store lookups."""

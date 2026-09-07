@@ -447,6 +447,30 @@ class Settings(BaseSettings):
         description="Default lifetime in days for newly issued API keys.",
     )
 
+    # -------------------------------------------------------------------------
+    # Performance & Caching Configuration
+    # -------------------------------------------------------------------------
+    performance_cache_enabled: bool = Field(
+        default=True,
+        description="Whether query embedding and retrieval result caches are enabled.",
+    )
+    performance_cache_max_size: int = Field(
+        default=1024,
+        ge=10,
+        le=100000,
+        description="Maximum entries stored in memory before LRU eviction.",
+    )
+    performance_cache_ttl_seconds: int = Field(
+        default=3600,
+        ge=1,
+        le=604800,
+        description="Time-to-live in seconds before cached embeddings and retrievals expire.",
+    )
+    concurrent_tool_execution_enabled: bool = Field(
+        default=True,
+        description="Whether independent agent tool calls are executed concurrently.",
+    )
+
     @property
     def is_production(self) -> bool:
         """Helper to check if running in production."""

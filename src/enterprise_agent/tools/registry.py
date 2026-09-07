@@ -1,5 +1,6 @@
 """Thread-safe Tool Registry for dynamic registration, schema export, and execution."""
 
+import asyncio
 import json
 from typing import Any
 
@@ -81,3 +82,14 @@ class ToolRegistry:
                 output=f"Error executing tool '{name}': {exc}",
                 is_error=True,
             )
+
+    async def execute_many(
+        self,
+        tool_calls: list[tuple[str, dict[str, Any]]],
+    ) -> list[ToolResult]:
+        """Execute multiple tool invocations concurrently via asyncio.gather."""
+        if not tool_calls:
+            return []
+
+        tasks = [self.execute(name, args) for name, args in tool_calls]
+        return list(await asyncio.gather(*tasks))

@@ -8,6 +8,7 @@ from enterprise_agent.embeddings.gemini import GeminiEmbeddingProvider
 from enterprise_agent.embeddings.mock import MockEmbeddingProvider
 from enterprise_agent.embeddings.openai import OpenAIEmbeddingProvider
 from enterprise_agent.embeddings.service import EmbeddingsService
+from enterprise_agent.performance.cache import QueryEmbeddingCache
 
 logger = get_logger(__name__)
 
@@ -69,10 +70,20 @@ def get_embedding_provider(settings: Settings) -> EmbeddingProvider:
     raise ConfigurationError(f"Unsupported embedding provider requested: '{provider_type}'")
 
 
-def get_embeddings_service(settings: Settings) -> EmbeddingsService:
+def get_embeddings_service(
+    settings: Settings,
+    cache: QueryEmbeddingCache | None = None,
+) -> EmbeddingsService:
     """Instantiate and return configured EmbeddingsService."""
     provider = get_embedding_provider(settings)
+    effective_cache = cache
+    if effective_cache is None and settings.performance_cache_enabled:
+        effective_cache = QueryEmbeddingCache(
+            max_size=settings.performance_cache_max_size,
+            ttl_seconds=float(settings.performance_cache_ttl_seconds),
+        )
     return EmbeddingsService(
         provider=provider,
         batch_size=settings.embedding_batch_size,
+        cache=effective_cache,
     )
