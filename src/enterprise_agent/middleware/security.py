@@ -27,7 +27,18 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         headers["Permissions-Policy"] = "geolocation=(), camera=(), microphone=()"
 
         # Permit Swagger UI / ReDoc CDN assets for interactive documentation paths
-        if not any(request.url.path.startswith(p) for p in ("/docs", "/redoc", "/openapi.json")):
+        if any(request.url.path.startswith(p) for p in ("/docs", "/redoc", "/openapi.json")):
+            pass
+        elif request.url.path == "/" or request.url.path.startswith("/static"):
+            headers["Content-Security-Policy"] = (
+                "default-src 'self'; "
+                "font-src 'self' https://fonts.gstatic.com data:; "
+                "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+                "script-src 'self' 'unsafe-inline'; "
+                "connect-src 'self'; "
+                "img-src 'self' data: https:;"
+            )
+        else:
             headers["Content-Security-Policy"] = "default-src 'self'"
 
         return response

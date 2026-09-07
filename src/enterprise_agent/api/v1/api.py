@@ -11,6 +11,7 @@ from enterprise_agent.api.v1.experiments import router as experiments_router
 from enterprise_agent.api.v1.guardrails import router as guardrails_router
 from enterprise_agent.api.v1.health import router as health_router
 from enterprise_agent.api.v1.observability import router as observability_router
+from enterprise_agent.api.v1.performance import router as performance_router
 from enterprise_agent.api.v1.rag import router as rag_router
 from enterprise_agent.api.v1.router import router as query_router
 from enterprise_agent.api.v1.search import router as search_router
@@ -34,3 +35,4 @@ api_v1_router.include_router(evaluation_router)
 api_v1_router.include_router(experiments_router)
 api_v1_router.include_router(observability_router)
 api_v1_router.include_router(security_router)
+api_v1_router.include_router(performance_router)

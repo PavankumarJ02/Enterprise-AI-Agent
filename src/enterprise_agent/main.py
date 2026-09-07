@@ -2,10 +2,12 @@
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 
-from fastapi import FastAPI, Request, status
+from fastapi import FastAPI, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from enterprise_agent.api.v1.api import api_v1_router
 from enterprise_agent.config.settings import Settings, get_settings
@@ -212,6 +214,28 @@ def create_application(settings: Settings | None = None) -> FastAPI:
     # Route Registration
     # -------------------------------------------------------------------------
     app.include_router(api_v1_router, prefix="/api/v1")
+
+    # Static Assets & Frontend Web Application
+    static_dir = Path(__file__).resolve().parent / "static"
+    static_dir.mkdir(parents=True, exist_ok=True)
+    app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+
+    @app.get("/", include_in_schema=False)
+    async def root_web_ui() -> Response:
+        """Serve the primary Aurora Glassmorphism web application."""
+        index_file = static_dir / "index.html"
+        if index_file.is_file():
+            return FileResponse(str(index_file))
+        fallback_html = (
+            "<!DOCTYPE html><html><head><title>Enterprise AI Agent</title></head>"
+            "<body style='font-family: sans-serif; background: #08090d; color: #fff; "
+            "text-align: center; padding: 4rem;'>"
+            "<h1>Enterprise AI Agent</h1>"
+            "<p>Web UI assets building. Visit <a href='/docs' style='color: #818cf8;'>"
+            "/docs</a> for Swagger UI.</p>"
+            "</body></html>"
+        )
+        return HTMLResponse(fallback_html)
 
     # Root health alias
     @app.get("/health", tags=["Health"], include_in_schema=False)
