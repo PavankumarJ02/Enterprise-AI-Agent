@@ -1,8 +1,10 @@
 """FastAPI dependency injection providers."""
 
-from collections.abc import Generator
+from collections.abc import Callable, Coroutine, Generator
+from datetime import UTC, datetime
+from typing import Any
 
-from fastapi import Depends
+from fastapi import Depends, Header, HTTPException, status
 
 from enterprise_agent.agent.service import AgentService
 from enterprise_agent.config.settings import Settings, get_settings
@@ -26,6 +28,19 @@ from enterprise_agent.router.heuristics import HeuristicRouter
 from enterprise_agent.router.llm import LLMRouter
 from enterprise_agent.router.semantic import SemanticEmbeddingRouter
 from enterprise_agent.router.service import QueryRouterService
+from enterprise_agent.security.base import (
+    APIKeyMetadata,
+    APIKeyScope,
+    APIKeyStatus,
+    APIKeyStore,
+)
+from enterprise_agent.security.crypto import (
+    constant_time_compare,
+    extract_key_prefix,
+    hash_api_key,
+)
+from enterprise_agent.security.manager import APIKeyManager
+from enterprise_agent.security.store import SQLiteAPIKeyStore
 from enterprise_agent.sparse.base import SparseStore
 from enterprise_agent.sparse.factory import create_sparse_store
 from enterprise_agent.sql.connection import SQLiteManager
@@ -72,6 +87,17 @@ _observability_service_instance: ObservabilityService | None = None
 
 # Module-level singleton instance of SlidingWindowRateLimiter
 _rate_limiter_instance: SlidingWindowRateLimiter | None = None
+
+# Module-level singleton instances for API Key Store and Manager
+_api_key_store_instance: APIKeyStore | None = None
+_api_key_manager_instance: APIKeyManager | None = None
+
+
+def reset_security_services() -> None:
+    """Reset singleton APIKeyStore and APIKeyManager for test isolation."""
+    global _api_key_store_instance, _api_key_manager_instance
+    _api_key_store_instance = None
+    _api_key_manager_instance = None
 
 
 def reset_rate_limiter() -> None:
@@ -418,3 +444,108 @@ def get_experiment_service(
             settings=settings,
         )
     return _experiment_service_instance
+
+
+def get_api_key_store(
+    settings: Settings = Depends(get_app_settings),
+) -> APIKeyStore:
+    """Dependency provider yielding singleton APIKeyStore."""
+    global _api_key_store_instance
+    if _api_key_store_instance is None:
+        if settings.is_testing or settings.security_api_keys_db_path == ":memory:":
+            _api_key_store_instance = SQLiteAPIKeyStore(db_path=":memory:")
+        else:
+            _api_key_store_instance = SQLiteAPIKeyStore(db_path=settings.security_api_keys_db_path)
+    return _api_key_store_instance
+
+
+def get_api_key_manager(
+    settings: Settings = Depends(get_app_settings),
+    store: APIKeyStore = Depends(get_api_key_store),
+) -> APIKeyManager:
+    """Dependency provider yielding singleton APIKeyManager."""
+    global _api_key_manager_instance
+    if _api_key_manager_instance is None:
+        _api_key_manager_instance = APIKeyManager(
+            store=store,
+            default_expiry_days=settings.api_key_default_expiry_days,
+        )
+    return _api_key_manager_instance
+
+
+def require_api_key(
+    required_scope: APIKeyScope | None = None,
+) -> Callable[..., Coroutine[Any, Any, APIKeyMetadata | None]]:
+    """Factory generating a FastAPI dependency requiring a valid API key with specified scope."""
+
+    async def _verifier(
+        x_api_key: str | None = Header(None, alias="X-API-Key"),
+        authorization: str | None = Header(None, alias="Authorization"),
+        settings: Settings = Depends(get_app_settings),
+        manager: APIKeyManager = Depends(get_api_key_manager),
+    ) -> APIKeyMetadata | None:
+        # Extract raw token from either X-API-Key or Authorization: Bearer
+        raw_token: str | None = None
+        if x_api_key and x_api_key.strip():
+            raw_token = x_api_key.strip()
+        elif authorization and authorization.strip():
+            parts = authorization.strip().split(" ", 1)
+            if len(parts) == 2 and parts[0].lower() == "bearer":
+                raw_token = parts[1].strip()
+
+        # If API security is disabled in environment (e.g. testing/dev default)
+        if not settings.api_security_enabled:
+            if raw_token:
+                val = await manager.validate_key(raw_token, required_scope=required_scope)
+                if val.is_valid:
+                    return val.key_metadata
+            return None
+
+        # API security is enabled: enforce authentication & authorization
+        if not raw_token:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=(
+                    "Authentication required. Provide valid 'X-API-Key' or "
+                    "'Authorization: Bearer <token>' header."
+                ),
+                headers={"WWW-Authenticate": "ApiKey"},
+            )
+
+        # Check master key authorization
+        master_secret = settings.security_master_key.get_secret_value()
+        if master_secret and constant_time_compare(raw_token, master_secret):
+            return APIKeyMetadata(
+                key_id="master-key-admin",
+                name="System Master Key",
+                key_hash=hash_api_key(master_secret),
+                prefix=extract_key_prefix(master_secret),
+                scopes=[
+                    APIKeyScope.ADMIN,
+                    APIKeyScope.RAG_READ,
+                    APIKeyScope.SQL_QUERY,
+                    APIKeyScope.AGENT_EXECUTE,
+                    APIKeyScope.EXPERIMENTS_WRITE,
+                    APIKeyScope.OBSERVABILITY_READ,
+                ],
+                status=APIKeyStatus.ACTIVE,
+                created_at=datetime.now(UTC),
+                description="Master bootstrap system administrative key",
+            )
+
+        validation = await manager.validate_key(raw_token, required_scope=required_scope)
+        if not validation.is_valid:
+            if validation.error_code == "INSUFFICIENT_SCOPE":
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=validation.error_message or "Insufficient scope permissions.",
+                )
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=validation.error_message or "Invalid or expired API key.",
+                headers={"WWW-Authenticate": "ApiKey"},
+            )
+
+        return validation.key_metadata
+
+    return _verifier

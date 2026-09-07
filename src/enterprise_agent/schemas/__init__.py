@@ -91,6 +91,14 @@ from enterprise_agent.schemas.search import (
     SparseSearchRequest,
     SparseSearchResponse,
 )
+from enterprise_agent.schemas.security import (
+    APIKeyCreateRequest,
+    APIKeyCreateResponse,
+    APIKeyListResponse,
+    APIKeyRevokeResponse,
+    APIKeyRotateRequest,
+    APIKeyRotateResponse,
+)
 from enterprise_agent.schemas.sql import (
     ColumnInfo,
     DatabaseSchemaResponse,
@@ -192,4 +200,10 @@ __all__ = [
     "TraceRecord",
     "TraceQueryFilter",
     "ObservabilityStats",
+    "APIKeyCreateRequest",
+    "APIKeyCreateResponse",
+    "APIKeyRotateRequest",
+    "APIKeyRotateResponse",
+    "APIKeyListResponse",
+    "APIKeyRevokeResponse",
 ]

@@ -81,6 +81,10 @@ OPENAPI_TAGS = [
         "name": "Observability & Distributed Tracing",
         "description": "OpenTelemetry and Langfuse distributed tracing, spans, and metrics.",
     },
+    {
+        "name": "Security & Access Control",
+        "description": "API key provisioning, RBAC scopes, zero-downtime rotation, and revocation.",
+    },
 ]
 
 

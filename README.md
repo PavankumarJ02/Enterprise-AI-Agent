@@ -550,8 +550,37 @@ mypy src tests
   - Persistent named volumes for vector storage (`qdrant_storage`) and application state/experiments (`agent_data`)
   - Container environment template `.env.docker.example` and optimized context exclusions in `.dockerignore`
   - Automated infrastructure unit tests in `tests/unit/test_docker_infrastructure.py` (344/344 tests passing project-wide)
-- [ ] **Milestone 21: Synthetic Enterprise Knowledge Base**
-- [ ] **Milestone 22: Interactive Demonstration Scenarios**
-- [ ] **Milestone 23: Security & Credential Hardening**
+- [x] **Milestone 21: Synthetic Enterprise Knowledge Base**
+  - Curated, multi-department enterprise knowledge base (`data/knowledge_base/`) containing 10 high-fidelity corporate policy documents spanning 5 departments:
+    - **Human Resources:** Global Benefits & Parental Leave (`benefits_and_leave.md`), Remote & Hybrid Work Guidelines (`remote_work_policy.md`)
+    - **Engineering & Operations:** Production Incident Response Runbook (`incident_response_runbook.md`), Kubernetes Deployment Standards (`kubernetes_deployment_standards.md`)
+    - **Legal & Compliance:** SOC2 Type II Security Controls (`soc2_type_ii_controls.md`), GDPR Data Privacy Governance (`gdpr_data_privacy_policy.md`)
+    - **Finance & Sourcing:** Corporate Travel & Expense Policy (`travel_and_expense_policy.md`), Procurement Approval Matrix (`procurement_approval_matrix.md`)
+    - **Customer Experience:** Enterprise Support SLA Tiers (`enterprise_sla_tiers.md`), Billing, Refund & Dispute Policy (`refund_and_dispute_policy.md`)
+  - Standalone automated CLI seeder utility (`scripts/seed_knowledge_base.py`) with recursive document discovery, header title extraction, automated chunking, dual Qdrant vector indexing, and BM25 sparse store synchronization
+  - Automated unit test suite (`tests/unit/test_knowledge_base_seeder.py`) validating content integrity, word count thresholds, dry-run execution, and semantic retrieval over seeded data (348/348 tests passing)
+- [x] **Milestone 22: Interactive Demonstration Scenarios**
+  - Standalone interactive terminal CLI suite (`scripts/demo_scenarios.py`) demonstrating all core platform capabilities across 6 realistic enterprise scenarios:
+    1. **Grounded Hybrid RAG & Citation Verification**: Dense vector + BM25 sparse dual-retrieval, authoritative source citation mapping, and claim-level factual entailment verification
+    2. **Semantic Query Router Cascade**: 3-tier cascade intent classification (`direct_chat`, `rag_search`, `sql_database`, `autonomous_agent`) with confidence scoring and routing telemetry
+    3. **Safe Read-Only SQL Tool & Security Interception**: Aggregation analytics over multi-table relational schema (`employees` JOIN `departments`), and AST-level defense blocking destructive stacked queries (`DROP TABLE`, `UPDATE`)
+    4. **Enterprise Guardrails & Defense**: Delimiter-attack and jailbreak prompt injection blocking, plus Luhn-validated credit card, SSN, and email PII entity masking
+    5. **ReAct Autonomous Decision Agent**: Multi-turn Thought-Action-Observation reasoning loop solving complex enterprise tasks via dynamic tool execution
+    6. **Experiment Tracking & Benchmark Delta Comparison**: Automated baseline vs. candidate hyperparameter sweep metrics comparison with polarity-aware delta reporting
+  - Interactive scenario selector menu, automated headless execution mode (`--all`), delay controls (`--delay`), and deterministic offline mock provider (`--mock`)
+- [x] **Milestone 23: Security & Credential Hardening**
+  - **Secrets Management Layer**: Provider-agnostic `SecretsManager` interface and `EnvSecretsManager` implementation with secret existence validation and safe `SecretStr` wrapping
+  - **API Key Lifecycle & Management (`APIKeyManager`)**:
+    - High-entropy CSPRNG key token generation (`secrets.token_urlsafe(32)`) with formatted enterprise prefixes (`ea_*`)
+    - Deterministic SHA-256 one-way hashing for lookup and storage, preventing secret token leakage in repositories or database dumps
+    - Granular Role-Based Access Control (RBAC) scopes: `rag:read`, `sql:query`, `agent:execute`, `experiments:write`, `observability:read`, and `admin`
+    - Constant-time comparison primitives (`hmac.compare_digest`) eliminating timing side-channel attacks
+  - **Zero-Downtime Key Rotation**: Programmatic rotation mechanism (`POST /api/v1/security/keys/{key_id}/rotate`) issuing replacement credentials while preserving an active transitional grace period (default 24h) for legacy client migration
+  - **Immediate Revocation**: Instant revocation (`DELETE /api/v1/security/keys/{key_id}`) invalidating compromised credentials in real time
+  - **Persistent & In-Memory Storage (`APIKeyStore`)**: Production-ready `SQLiteAPIKeyStore` with thread-safe connection pooling, index optimizations, and `InMemoryAPIKeyStore` for test isolation
+  - **Telemetry & Log Credential Redaction (`TelemetryRedactor` & `LoggingRedactionFilter`)**: Automatic real-time regex sanitization masking third-party API keys (`sk-*`), agent tokens (`ea_*`), bearer tokens, GitHub tokens (`ghp_*`), AWS keys (`AKIA*`), and database connection string credentials across all log records and span payloads
+  - **FastAPI Security Dependencies**: `require_api_key(scope)` dependency enforcing authentication headers (`X-API-Key` or `Authorization: Bearer`), bootstrap master key override (`security_master_key`), and automatic test-mode pass-through
+  - **REST API Endpoints**: Provisioning (`POST /api/v1/security/keys`), Listing (`GET /api/v1/security/keys`), Rotation (`POST /api/v1/security/keys/{id}/rotate`), and Revocation (`DELETE /api/v1/security/keys/{id}`)
+  - Comprehensive unit and integration test coverage (`tests/unit/test_security_manager.py` and `tests/integration/test_security_api.py`) with 374/374 passing tests project-wide
 - [ ] **Milestone 24: Latency & Throughput Performance Optimization**
 - [ ] **Milestone 25: Resume-Quality Documentation & Architecture Showcase**

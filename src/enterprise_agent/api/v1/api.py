@@ -14,6 +14,7 @@ from enterprise_agent.api.v1.observability import router as observability_router
 from enterprise_agent.api.v1.rag import router as rag_router
 from enterprise_agent.api.v1.router import router as query_router
 from enterprise_agent.api.v1.search import router as search_router
+from enterprise_agent.api.v1.security import router as security_router
 from enterprise_agent.api.v1.sql import router as sql_router
 from enterprise_agent.api.v1.transformation import router as transform_router
 
@@ -32,3 +33,4 @@ api_v1_router.include_router(guardrails_router)
 api_v1_router.include_router(evaluation_router)
 api_v1_router.include_router(experiments_router)
 api_v1_router.include_router(observability_router)
+api_v1_router.include_router(security_router)

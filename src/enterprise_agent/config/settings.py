@@ -425,6 +425,28 @@ class Settings(BaseSettings):
         description="Whether OWASP-recommended HTTP security headers are injected.",
     )
 
+    # -------------------------------------------------------------------------
+    # Security & Credential Hardening Configuration
+    # -------------------------------------------------------------------------
+    api_security_enabled: bool = Field(
+        default=False,
+        description="Whether API key authentication and scoped RBAC are strictly enforced.",
+    )
+    security_master_key: SecretStr = Field(
+        default=SecretStr("insecure-dev-master-key-replace-in-production"),
+        description="Master key for administrative key management operations.",
+    )
+    security_api_keys_db_path: str = Field(
+        default="data/api_keys.db",
+        description="Filesystem path for persistent SQLite API key store.",
+    )
+    api_key_default_expiry_days: int = Field(
+        default=90,
+        ge=1,
+        le=3650,
+        description="Default lifetime in days for newly issued API keys.",
+    )
+
     @property
     def is_production(self) -> bool:
         """Helper to check if running in production."""
